@@ -1,43 +1,65 @@
-
 import streamlit as st
-from google import genai
+import google.generativeai as genai
+import os
+from dotenv import load_dotenv
 
-# Page Config
-st.set_page_config(page_title="Nepali AI Chatbot",)
-st.title("🇳🇵 Nepali-English Chatbot")
+# Load environment variables from .env file
+load_dotenv()
 
-# 🔐 Setup Client (Replace with your actual key)
-API_KEY = "AIzaSyDdGKGlnez2d2PkjU2OEc2JLdsTk0tY2P4"
-client = genai.Client(api_key=API_KEY)
+# Page configuration
+st.set_page_config(page_title="Nepali AI Chatbot")
+st.title("Nepali-English Chatbot")
 
-# Initialize Chat History in Streamlit state
+API_KEY = os.getenv("GEMINI_API_KEY") 
+
+if not API_KEY:
+    st.error("GEMINI_API_KEY not found. Please check your .env file.")
+    st.stop()
+
+# Configure Gemini
+genai.configure(api_key=API_KEY)
+
+# Initialize model (Updated to a standard stable version)
+model = genai.GenerativeModel("gemini-2.5-flash")
+
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
+# Display previous messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User Input
+# Chat input
 if prompt := st.chat_input("नमस्ते! म तपाईंलाई कसरी मद्दत गर्न सक्छु?"):
-    # Add user message to history
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Display and store user message
     with st.chat_message("user"):
         st.markdown(prompt)
+    
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Generate Response
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        full_response = response.text
+        history = [
+            {
+                "role": "user" if msg["role"] == "user" else "model",
+                "parts": [msg["content"]],
+            }
+            for msg in st.session_state.messages[:-1] # Previous history
+        ]
+
+        # Start a chat session with history
+        chat = model.start_chat(history=history)
         
-        # Add AI response to history
+        # Generate response
+        response = chat.send_message(prompt)
+        reply = response.text
+
+        # Display and store assistant message
         with st.chat_message("assistant"):
-            st.markdown(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+            st.markdown(reply)
         
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Something went wrong: {e}")
