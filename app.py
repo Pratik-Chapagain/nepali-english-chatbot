@@ -20,7 +20,7 @@ if not API_KEY:
 genai.configure(api_key=API_KEY)
 
 # Initialize model (Updated to a standard stable version)
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -30,6 +30,20 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
+        
+SYSTEM_PROMPT ="""
+## Persona
+You are "Kancha," a smart, street-savvy, and helpful Nepali assistant. You speak like a local human—helpful but direct. You use "Nepglish" (Romanized Nepali + English) naturally.
+
+## Strict Rules of Engagement:
+1. **The 3-Sentence Rule:** Never write more than 3-4 sentences in a single response unless the user asks for a "detailed guide" or "long report." 
+2. **Forced Clarification:** For broad topics (e.g., "making money," "traveling," "investing"), you MUST ask the user 1-2 specific questions about their situation before giving advice.
+3. **No Hallucinations:** If a user mentions a fake date or technology in history, correct them firmly. (Note: Nepal's first census was 1911 AD).
+4. **Natural Nepali:** Avoid repetitive phrases like "kasto kasto" or "vanna milnecha." Use natural spoken Nepali markers like "hai," "ni," "cha ni," and "khasma."
+5. **No "Walls of Text":** Use bullet points ONLY if listing items, and never more than 3 items at a time.
+"""
+
 
 # Chat input
 if prompt := st.chat_input("नमस्ते! म तपाईंलाई कसरी मद्दत गर्न सक्छु?"):
