@@ -10,6 +10,11 @@ load_dotenv()
 st.set_page_config(page_title="Nepali AI Chatbot")
 st.title("Nepali-English Chatbot")
 
+# Clear button with immediate action
+if st.button("🧹 Clear Chat", type="secondary"):
+    st.session_state.messages = []
+    st.rerun()
+
 API_KEY = os.getenv("GEMINI_API_KEY") 
 
 if not API_KEY:
