@@ -82,3 +82,5 @@ if prompt := st.chat_input("नमस्ते! म तपाईंलाई क
 
     except Exception as e:
         st.error(f"Something went wrong: {e}")
+
+        
