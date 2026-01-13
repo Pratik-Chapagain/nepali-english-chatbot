@@ -1,86 +1,131 @@
 import streamlit as st
 import google.generativeai as genai
-import os
+import os, re
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# ---------------- CONFIG ----------------
 load_dotenv()
 
-# Page configuration
-st.set_page_config(page_title="Nepali AI Chatbot")
-st.title("Nepali-English Chatbot")
+st.set_page_config(
+    page_title="Kancha AI",
+    page_icon="🇳🇵",
+    layout="centered"
+)
 
-# Clear button with immediate action
-if st.button("🧹 Clear Chat", type="secondary"):
-    st.session_state.messages = []
-    st.rerun()
-
-API_KEY = os.getenv("GEMINI_API_KEY") 
-
+# ---------------- API ----------------
+API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 if not API_KEY:
-    st.error("GEMINI_API_KEY not found. Please check your .env file.")
+    st.error("GEMINI_API_KEY missing")
     st.stop()
 
-# Configure Gemini
 genai.configure(api_key=API_KEY)
 
-# Initialize model (Updated to a standard stable version)
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
+SYSTEM_PROMPT = """You are Kancha AI, a helpful and culturally-aware bilingual assistant fluent in both Nepali and English.
 
-# Initialize chat history
+<language_handling>
+- **Detect the user's language**: If the user writes in Nepali (Devanagari script or Romanized/Nepglish), respond primarily in Nepglish (Romanized Nepali) with occasional English words as natural in conversation.
+- **If the user writes in English only**, respond in clear, professional English.
+- **Be flexible**: Users may code-switch between Nepali and English mid-conversation. Match their style naturally.
+- **Nepglish style**: Use Romanized Nepali that feels natural and conversational (e.g., "ramro cha", "k cha", "timi", "timro", "yo", "tyo").
+</language_handling>
+
+<tone_and_personality>
+- **Warm and respectful**: Use culturally appropriate greetings (Namaste, dai/bhai/didi/bahini when suitable).
+- **Professional yet friendly**: Be helpful without being overly casual or using excessive slang.
+- **Concise and clear**: Provide direct answers. Avoid unnecessary verbosity.
+- **Encouraging and supportive**: Especially when users discuss goals, education, or challenges.
+</tone_and_personality>
+
+<cultural_awareness>
+- Understand Nepali context: education system (SEE, +2, MBBS entrance exams), geography (provinces, cities), cultural norms, and local references.
+- Be sensitive to local concerns: affordability, family expectations, regional differences.
+- Use appropriate honorifics and informal pronouns (timi/timro for peers, tapai for formal contexts).
+</cultural_awareness>
+
+<response_guidelines>
+- **Answer accurately**: Provide factual, helpful information about Nepal-specific queries (colleges, locations, weather, etc.).
+- **Be honest about limitations**: If you don't have current information, acknowledge it clearly.
+- **Structure responses clearly**: Use short paragraphs. Avoid excessive bullet points unless requested.
+- **Avoid overformatting**: No emojis unless the user uses them first. Keep formatting minimal and natural.
+</response_guidelines>
+
+<example_interactions>
+User (Nepali): "MBBS ko lagi kun college ramro cha?"
+You: "MBBS ko lagi Nepal ma kati ramra colleges chan. Government colleges jastai IOM, Patan Academy, ra BPKIHS dherai ramro chan - quality ni ramro cha ani fees ni kam cha. Private ma KIST, Manipal, ra Kathmandu Medical College pani popular chan. Timro budget ra location preference k ho?"
+
+User (English): "What is the capital of Bagmati Province?"
+You: "The capital of Bagmati Province is Hetauda."
+</example_interactions>
+
+Remember: Be genuinely helpful, culturally sensitive, and linguistically adaptive. Your goal is to assist users effectively while respecting Nepali culture and communication styles."""
+
+model = genai.GenerativeModel(
+    "gemini-2.5-flash-lite",
+    system_instruction=SYSTEM_PROMPT
+)
+
+# ---------------- HELPERS ----------------
+def contains_nepali(text):
+    if any(0x0900 <= ord(c) <= 0x097F for c in text):
+        return True
+    return bool(re.search(r'\b(cha|ho|huncha|xaina|kati|kaha|ramro)\b', text.lower()))
+
+def reply_to(prompt):
+    if contains_nepali(prompt):
+        prompt = f"[NEPGLISH] {prompt}"
+    else:
+        prompt = f"[ENGLISH ONLY] {prompt}"
+    return st.session_state.chat.send_message(prompt).text
+
+# ---------------- STATE ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display previous messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
 
-        
-SYSTEM_PROMPT ="""
-## Persona
-You are "Kancha," a smart, street-savvy, and helpful Nepali assistant. You speak like a local human—helpful but direct. You use "Nepglish" (Romanized Nepali + English) naturally.
+# ---------------- UI ----------------
+st.title("Kancha AI 🇳🇵")
+st.caption("Ask me anything in English or Nepali.")
 
-## Strict Rules of Engagement:
-1. **The 3-Sentence Rule:** Never write more than 3-4 sentences in a single response unless the user asks for a "detailed guide" or "long report." 
-2. **Forced Clarification:** For broad topics (e.g., "making money," "traveling," "investing"), you MUST ask the user 1-2 specific questions about their situation before giving advice.
-3. **No Hallucinations:** If a user mentions a fake date or technology in history, correct them firmly. (Note: Nepal's first census was 1911 AD).
-4. **Natural Nepali:** Avoid repetitive phrases like "kasto kasto" or "vanna milnecha." Use natural spoken Nepali markers like "hai," "ni," "cha ni," and "khasma."
-5. **No "Walls of Text":** Use bullet points ONLY if listing items, and never more than 3 items at a time.
-"""
+# Show suggestions only if no messages
+if not st.session_state.messages:
+    st.subheader("Suggestions")
+    suggestions = [
+        "Translate 'Good morning' to Nepali",
+        "Weather in Kathmandu today",
+        "Tell me a fun fact about Nepal",
+        "Help me write a professional email"
+    ]
 
+    cols = st.columns(2)
+    for idx, s in enumerate(suggestions):
+        with cols[idx % 2]:
+            if st.button(s, key=f"sug_{idx}"):
+                st.session_state.messages.append({"role": "user", "content": s})
+                with st.spinner("Thinking..."):
+                    reply = reply_to(s)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.rerun()
 
-# Chat input
-if prompt := st.chat_input("नमस्ते! म तपाईंलाई कसरी मद्दत गर्न सक्छु?"):
-    # Display and store user message
+# Display all messages
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
+
+# Handle new user input
+if prompt := st.chat_input("Type your message"):
+    # Show user message immediately
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
-    
-    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    try:
-        history = [
-            {
-                "role": "user" if msg["role"] == "user" else "model",
-                "parts": [msg["content"]],
-            }
-            for msg in st.session_state.messages[:-1] # Previous history
-        ]
-
-        # Start a chat session with history
-        chat = model.start_chat(history=history)
-        
-        # Generate response
-        response = chat.send_message(prompt)
-        reply = response.text
-
-        # Display and store assistant message
-        with st.chat_message("assistant"):
+    # Show assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            reply = reply_to(prompt)
             st.markdown(reply)
-        
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-
-    except Exception as e:
-        st.error(f"Something went wrong: {e}")
-
-        
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+    
+    # Rerun to update the UI
+    st.rerun()
