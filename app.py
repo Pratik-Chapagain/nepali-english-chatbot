@@ -71,6 +71,38 @@ def contains_nepali(text):
     return bool(re.search(r'\b(cha|ho|huncha|xaina|kati|kaha|ramro)\b', text.lower()))
 
 def reply_to(prompt):
+    """Send message to Gemini API with error handling"""
+    try:
+        if contains_nepali(prompt):
+            prompt = f"[NEPGLISH] {prompt}"
+        else:
+            prompt = f"[ENGLISH ONLY] {prompt}"
+        
+        # API call with timeout
+        response = st.session_state.chat.send_message(
+            prompt,
+            request_options={"timeout": 30}
+        )
+        return response.text
+        
+    except Exception as e:
+        # Friendly error messages
+        error_message = str(e).lower()
+        
+        if "quota" in error_message or "429" in str(e):
+            return "**⚠️ Service Limit Reached**\n\nI've reached my usage limit for now. Please try again later or contact the administrator."
+        
+        elif "timeout" in error_message:
+            return "**⏱️ Response Timeout**\n\nThe AI is taking too long. Try:\n• Shorter messages\n• Waiting a moment\n• Breaking complex questions into parts"
+        
+        elif "network" in error_message or "connection" in error_message:
+            return "**🌐 Connection Issue**\n\nPlease check your internet connection and try again."
+        
+        elif "invalid" in error_message and "key" in error_message:
+            return "**🔑 Configuration Issue**\n\nThere's a problem with the AI service setup. Please report this issue."
+        
+        else:
+            return f"**❌ Unexpected Error**\n\nI encountered an issue: `{str(e)[:80]}...`\n\nPlease try rephrasing your question or try again in a moment."
     if contains_nepali(prompt):
         prompt = f"[NEPGLISH] {prompt}"
     else:
@@ -85,7 +117,7 @@ if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
 # ---------------- UI ----------------
-st.title("Kancha AI 🇳🇵")
+st.title("Kancha AI")
 st.caption("Ask me anything in English or Nepali.")
 
 # Show suggestions only if no messages
