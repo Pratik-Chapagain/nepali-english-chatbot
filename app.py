@@ -1,5 +1,5 @@
 import streamlit as st
-import google.genai as genai
+import google.generativeai as genai  # CHANGED: Use OLD package
 import os, re, time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
