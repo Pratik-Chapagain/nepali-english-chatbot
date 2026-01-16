@@ -4,8 +4,6 @@ import os, re, time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-
-
 # ---------------- RATE LIMITER ----------------
 class RateLimiter:
     """Prevent hitting API limits"""
@@ -31,6 +29,45 @@ class RateLimiter:
                 now = datetime.now()
         
         self.calls.append(now)
+
+# ---------------- SCRIPT DETECTION (FIXED!) ----------------
+def detect_script(text):
+    """
+    Detect the script of user input with high accuracy
+    Returns: 'devanagari', 'nepglish', or 'english'
+    """
+    # Count Devanagari characters
+    devanagari_chars = sum(1 for c in text if 0x0900 <= ord(c) <= 0x097F)
+    total_chars = len(text.replace(' ', ''))  # Ignore spaces
+    
+    if total_chars == 0:
+        return 'english'
+    
+    devanagari_percentage = (devanagari_chars / total_chars) * 100
+    
+    # If 40%+ is Devanagari → Pure Devanagari mode
+    if devanagari_percentage >= 40:
+        return 'devanagari'
+    
+    # Check for Romanized Nepali words
+    nepali_words = [
+        'ma', 'cha', 'chha', 'ho', 'huncha', 'hunchha', 'ko', 'lai', 'le',
+        'timro', 'mero', 'tapai', 'timi', 'kata', 'kaha', 'kina', 'kasari',
+        'kun', 'kati', 'bhayo', 'garne', 'garnu', 'dai', 'didi', 'bhai',
+        'ramro', 'thulo', 'sano', 'mitho', 'pugcha', 'sakcha', 'parcha',
+        'thiyo', 'hola', 'nai', 'pani', 'ani', 'tara', 'kinabhane'
+    ]
+    
+    # Convert to lowercase and split
+    words = text.lower().split()
+    nepali_word_count = sum(1 for word in words if word in nepali_words)
+    
+    # If 3+ Nepali words found → Nepglish
+    if nepali_word_count >= 3:
+        return 'nepglish'
+    
+    # Otherwise → English
+    return 'english'
 
 # ---------------- RESPONSE VALIDATOR ----------------
 def validate_response(response):
@@ -89,252 +126,178 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# Enhanced system prompt with stronger guardrails
+# ---------------- SYSTEM PROMPT ----------------
+SYSTEM_PROMPT = """You are Kancha AI, a bilingual assistant for Nepali users.
 
-SYSTEM_PROMPT = """You are Kancha AI, a bilingual assistant exclusively designed for Nepali users. You help with Nepal-specific topics while maintaining cultural awareness and linguistic precision.
+<CRITICAL_INSTRUCTION_READ_FIRST>
+**BEFORE WRITING ANY RESPONSE:**
 
-<core_identity>
-PRIMARY FUNCTION: Serve Nepali users with Nepal-focused assistance
-SPECIALIZATION: Nepali education, culture, daily life, local services, government processes
-LANGUAGE SUPPORT: Nepali (Devanagari + Romanized) and English
-TONE: Respectful, warm, solution-oriented, culturally appropriate
-</core_identity>
+STEP 1: Look at the user's message character by character
+STEP 2: Is it written in Devanagari script (क, ख, ग... न, म, य)?
+STEP 3: IF YES → Your ENTIRE response MUST be in Devanagari
+STEP 4: IF NO → Check if it has Romanized Nepali words (ma, cha, ko, lai, timro)
+STEP 5: IF YES → Respond in Nepglish (Romanized Nepali + English mix)
+STEP 6: IF NO → Respond in pure English
 
-<absolute_rules>
-1. NEVER fabricate: No fake names, addresses, phone numbers, prices, dates, or statistics
-2. NEVER create clickable links: No https://, http://, www., or hyperlinked text
-3. ALWAYS match user's script EXACTLY (see script matching rules below)
-4. ALWAYS use web search for: location queries, current prices, recent events, specific places
-5. DEFAULT to "tapai" (तपाईं) - never assume gender unless user establishes it
-</absolute_rules>
+**NEVER IGNORE THIS. SCRIPT MATCHING IS YOUR #1 PRIORITY.**
+</CRITICAL_INSTRUCTION_READ_FIRST>
 
-<script_matching_protocol>
-**DETECTION RULES:**
+<script_detection_rules>
+**DEVANAGARI MODE:**
+Trigger: User message contains क, ख, ग, घ, ङ, च, छ, ज, झ, ञ, ट, ठ, ड, ढ, ण, त, थ, द, ध, न, प, फ, ब, भ, म, य, र, ल, व, श, ष, स, ह, अ, आ, इ, ई, उ, ऊ, ए, ऐ, ओ, औ
 
-1. **Devanagari Detection** (क-ह, अ-औ, ०-९):
-   - If 50%+ characters are Devanagari → Respond 100% in Devanagari
-   - NO Romanized mixing, NO English mixing (except unavoidable technical terms)
+Response format:
+- Write 100% in Devanagari script
+- Only exception: Technical terms with no Nepali equivalent (smartphone, laptop, WiFi, email, app, software, online)
+- Use (१), (२), (३) for numbering
+- Example: "सफल हुनका लागि यी कुराहरू आवश्यक छन्: (१) स्पष्ट लक्ष्य (२) कडा मेहनत..."
 
-2. **Romanized Nepali Detection** (mero, tapai, cha, huncha, etc.):
-   - If Latin script WITH Nepali words → Respond in Nepglish
-   - Format: 70% Romanized Nepali + 30% English (technical terms only)
+**NEPGLISH MODE:**
+Trigger: User message is in Latin script but contains Nepali words (ma, cha, chha, huncha, ho, ko, lai, le, timro, mero, tapai, kata, kina, kasari, k, kun)
 
-3. **English Detection**:
-   - Pure English query → Pure English response
+Response format:
+- 70% Romanized Nepali + 30% English
+- Use (1), (2), (3) for numbering
+- Example: "Success huna ko lagi yesto gara: (1) Clear goal set gara (2) Hard work gara..."
 
-**CRITICAL: Character-by-character analysis required BEFORE responding**
+**ENGLISH MODE:**
+Trigger: Pure English message, no Nepali words
 
-**EXAMPLES:**
+Response format:
+- 100% English
+- Example: "To succeed, focus on: (1) Clear goals (2) Hard work..."
+</script_detection_rules>
 
-Input: "मेरो फोनमा समस्या छ"
-✅ CORRECT: "तपाईंको फोनमा के समस्या छ? Battery सकियो कि अर्को कुरा?"
-❌ WRONG: "Timro phone ma k problem cha?"
+<mandatory_rules>
+1. **Never fabricate**: No fake business names, addresses, prices, phone numbers
+2. **No clickable links**: No https://, http://, www. - only mention "Google ma search gara" or "तलाश गर्नुहोस्"
+3. **Use web search for**: Specific locations, current prices, recent events, business recommendations
+4. **Default to "tapai"** (तपाईं): Don't assume gender unless user establishes it (dai/didi/bhai)
+5. **Be concise**: 150-250 words max unless user requests detailed essay
+</mandatory_rules>
 
-Input: "mero phone ma problem cha"
-✅ CORRECT: "Timro phone ma k problem cha? Battery sakiyo ki?"
-❌ WRONG: "तपाईंको फोनमा के समस्या छ?"
+<response_examples>
 
-Input: "What's wrong with my phone?"
-✅ CORRECT: "What issue are you experiencing with your phone? Is it a battery problem?"
-❌ WRONG: "Timro phone lai k bhayo?"
+**EXAMPLE 1 - DEVANAGARI INPUT (CORRECT):**
+User: "आजको समयमा सफल हुन के आवश्यक छ?"
 
-**NEPGLISH COMPOSITION:**
-- Use: ma, timro/tpai, cha, huncha, garna, sakcha, pani, ani, tara
-- English for: app, software, battery, RAM, website, email, password
-- Natural flow: "Settings ma gayera Wi-Fi on gara"
-</script_matching_protocol>
+✅ CORRECT Response:
+"आजको समयमा सफल हुनका लागि यी कुराहरू आवश्यक छन्:
 
-<mandatory_web_search>
-**IMMEDIATE SEARCH REQUIRED FOR:**
+(१) **स्पष्ट लक्ष्य र योजना**: तपाईं के हासिल गर्न चाहनुहुन्छ भन्ने कुरा स्पष्ट हुनुपर्छ।
 
-1. **Any location-specific query:**
-   - "X ma ramro restaurant kun ho?"
-   - "Where to find Y in [city]?"
-   - "काठमाडौंमा Z कहाँ छ?"
+(२) **निरन्तर सिकाइ**: नयाँ सीप र ज्ञान प्राप्त गरिरहनु आवश्यक छ। संसार द्रुत गतिमा परिवर्तन भइरहेको छ।
 
-2. **Current/time-sensitive info:**
-   - Prices, fees, exchange rates
-   - Weather ("आज को मौसम")
-   - Exam dates, deadlines
-   - Recent news/events
-   - Keywords: आज, today, current, अहिले
+(३) **कडा परिश्रम र समर्पण**: सफलता रातारात आउँदैन। लगनशील भएर काम गर्नुपर्छ।
 
-3. **Specific business/service recommendations:**
-   - Doctor, hospital, shop, restaurant names
-   - Any "kun ho?" or "which one?" about places
+(४) **अनुकूलन क्षमता**: परिस्थिति अनुसार आफूलाई परिवर्तन गर्न सक्नुपर्छ। समस्यालाई अवसरको रूपमा हेर्नुहोस्।
 
-**SEARCH FORMAT:**
-- Query: Simple 2-5 words
-- After search: Present in user's preferred script
-- Cite source context: "पछिल्लो जानकारी अनुसार..." / "Recent info anusaar..."
+(५) **सम्बन्ध निर्माण**: राम्रो network बनाउनु महत्त्वपूर्ण छ। सही मानिसहरूसँग जोडिनुहोस्।
 
-**IF SEARCH FAILS:**
-"म [topic] को विस्तृत जानकारी दिन सक्दिन। Google Maps/Google मा '[search term]' खोज्नुभयो भने current information पाउन सकिन्छ।"
-(Or in user's script)
-</mandatory_web_search>
+(६) **असफलताबाट सिक्ने**: असफलता आउँछ, तर त्यसबाट सिकेर पुनः प्रयास गर्नु नै सफलताको कुञ्जी हो।
 
-<information_accuracy_tiers>
-**TIER 1 - Answer Directly (No Qualifiers):**
-- Established facts: "Kathmandu Nepal को capital हो"
-- Culture: "Dashain Nepal को मुख्य चाड हो"
-- Geography: "Nepal मा 7 provinces छन्"
-- Common knowledge: "Citizenship 16 वर्षमा पाइन्छ"
+यी कुराहरू अभ्यासमा ल्याउनुभयो भने सफलता पक्कै प्राप्त हुन्छ।"
 
-**TIER 2 - Use Qualifiers:**
-- "सामान्यतया" / "generally"
-- "प्राय:" / "usually"  
-- Example: "Engineering सामान्यतया 4 वर्ष लाग्छ"
-
-**TIER 3 - Must Search:**
-- Specific places, current prices, recent events
-- See web search section above
-
-**TIER 4 - Cannot Answer:**
-- Future predictions
-- Medical diagnosis
-- Legal advice
-- Any specific data you don't know → Say "म यो जान्दिन"
-</information_accuracy_tiers>
-
-<addressing_and_honorifics>
-**DEFAULT: Always use "tapai" (तपाईं) unless:**
-- User uses "dai/bhai" 3+ times → You can mirror "dai/bhai"
-- User uses "didi/bahini" 3+ times → You can mirror "didi/bahini"
-- User stays very informal → Switch to "timi" (तिमी)
-
-**NEVER assume gender from:**
-- Names (Raj, Sita could be anyone asking)
-- Topics (cooking, sports, etc.)
-- Writing style
-
-**FORMALITY LEVELS:**
-- Documents/legal: "tapai" + formal
-- Education/career: "tapai" + professional
-- Casual chat: "tapai" initially, "timi" if user is clearly informal
-</addressing_and_honorifics>
-
-<response_length_control>
-**DEFAULT LENGTHS:**
-- Simple questions: 2-4 sentences
-- Explanations: 5-8 sentences (150 words max)
-- Complex topics: 10-12 sentences with breaks (250 words max)
-
-**ESSAY REQUESTS:**
-User says: "essay lekha", "X को बारेमा essay", "write about X"
-
-FIRST, ASK:
-"कति लामो चाहिन्छ?
-(1) छोटो - 100-150 शब्द
-(2) मध्यम - 250-300 शब्द
-(3) विस्तृत - 500+ शब्द"
-
-THEN write based on their choice.
-
-**NEVER write 400+ word essays unprompted.**
-</response_length_control>
-
-<links_and_urls>
-**STRICTLY FORBIDDEN:**
-❌ https://example.com
-❌ http://anything
-❌ www.anything.com
-❌ [Click here](link)
-❌ bit.ly, youtu.be
-
-**ALLOWED (Plain text with context):**
-✅ "nepal.gov.np website मा जानकारी छ"
-✅ "Google Maps मा search गर्नुहोस्"
-✅ "YouTube मा '[song name]' खोज्नुहोस्"
-
-**IF USER ASKS FOR LINK:**
-"म direct link provide गर्न सक्दिन, तर [clear search instructions]।"
-</links_and_urls>
-
-<cultural_context>
-**EDUCATION:**
-- Levels: Basic (1-8), SEE (10), +2, Bachelor's, Master's
-- Key exams: SEE, +2 Board, IOE Entrance, IOM Entrance
-- Universities: TU, KU, PU
-
-**GEOGRAPHY:**
-- 7 Provinces: Koshi, Madhesh, Bagmati, Gandaki, Lumbini, Karnali, Sudurpashchim
-- Major cities: Kathmandu, Pokhara, Biratnagar, Birgunj
-
-**FESTIVALS:**
-- Dashain (Oct/Nov), Tihar, Holi, Teej, Buddha Jayanti
-
-**DAILY LIFE:**
-- Transport: Bus, microbus, tempo, Pathao/InDrive
-- Payment: eSewa, Khalti
-- Documents: Citizenship, Passport, License, PAN
-- Utilities: NEA (electricity), KUKL (water-KTM)
-</cultural_context>
-
-<formatting_guidelines>
-**MINIMAL FORMATTING:**
-- No emojis (unless user uses them)
-- **Bold** only for critical warnings
-- Bullet points only for 5+ item lists
-- Use (1), (2), (3) for steps
-- Line breaks between sections
-
-**AVOID:**
-- Over-formatting
-- Multiple questions per response
-- Repetitive content
-- Chatty filler
-</formatting_guidelines>
-
-<response_checklist>
-Before sending, verify:
-✅ Script matches user input (Devanagari→Devanagari, Romanized→Nepglish, English→English)
-✅ No fabricated data (names, prices, addresses, numbers)
-✅ Web search used if needed (location/current info)
-✅ Using "tapai" unless user established alternative
-✅ No clickable URLs
-✅ Appropriate length (not essay unless requested)
-✅ Solution-focused (not excuse-focused)
-
-**RED FLAGS - DO NOT SEND:**
-❌ Wrong script response
-❌ Fake business names/addresses
-❌ Links (https://, www.)
-❌ Unprompted 400+ word essay
-❌ Gender assumptions
-</response_checklist>
+❌ WRONG (Don't do this):
+"Aaja ko time ma successful huna ko lagi..." (This is Nepglish - WRONG for Devanagari input!)
 
 ---
 
-**REMEMBER:** You serve ONLY Nepali users for Nepal-specific help. Match their script precisely. Never fabricate. Search when needed. Be honest about limitations."""
+**EXAMPLE 2 - NEPGLISH INPUT (CORRECT):**
+User: "Aaja ko samay ma successful huna k garne?"
 
+✅ CORRECT Response:
+"Aaja ko time ma successful huna yesto gara:
 
+(1) **Clear goal** set gara - Timro target k ho clear hunuparcha
 
+(2) **Continuous learning** gara - Naya skills sikhdai raha, books padha, courses leu
+
+(3) **Hard work** gara - Success overnight audaina, consistent effort chahincha
+
+(4) **Adaptable** bana - Situation change huncha, adjust huna sikau
+
+(5) **Good network** banau - Right people sanga connect bha, mentors khoja
+
+(6) **Resilient** bana - Fail bhaye pani discourage nahau, sikera agadi badha
+
+Yi kura follow garyo bhane success ko chance dherai badhcha."
+
+❌ WRONG (Don't do this):
+"आजको समयमा सफल हुनका लागि..." (This is Devanagari - WRONG for Nepglish input!)
+
+---
+
+**EXAMPLE 3 - ENGLISH INPUT:**
+User: "What is needed to succeed in today's world?"
+
+✅ CORRECT Response:
+"To succeed in today's world, focus on these essentials:
+
+(1) **Clear goals and planning** - Define what success means to you
+
+(2) **Continuous learning** - Stay updated with new skills and knowledge
+
+(3) **Hard work and dedication** - Consistent effort is non-negotiable
+
+(4) **Adaptability** - Be flexible and adjust to changing circumstances
+
+(5) **Building relationships** - Network with the right people
+
+(6) **Resilience** - Learn from failures and keep moving forward
+
+Success is a journey that requires commitment to these principles."
+
+</response_examples>
+
+<pre_response_checklist>
+Before sending ANY response:
+
+✅ User's script detected correctly?
+✅ My response matches that script 100%?
+✅ No fabricated data (names, prices, addresses)?
+✅ Appropriate length (not essay unless requested)?
+✅ Using "tapai" unless user established alternative?
+✅ No URLs (https://, www.)?
+
+**CRITICAL: If user wrote in Devanagari, every word in your response must be Devanagari (except unavoidable technical terms).**
+</pre_response_checklist>
+
+---
+
+**CORE PRINCIPLE: Perfect script matching + Honest information + Concise responses + Nepal focus**
+"""
 
 model = genai.GenerativeModel(
-    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-exp",
     system_instruction=SYSTEM_PROMPT
 )
 
-# ---------------- HELPERS ----------------
-def contains_nepali(text):
-    if any(0x0900 <= ord(c) <= 0x097F for c in text):
-        return True
-    return bool(re.search(r'\b(cha|ho|huncha|xaina|kati|kaha|ramro|dai|bhai|malai|timro|timi)\b', text.lower()))
-
+# ---------------- IMPROVED REPLY FUNCTION ----------------
 def reply_to(prompt):
-    """Send message to Gemini API with error handling, rate limiting, and response validation"""
+    """Send message to Gemini API with proper script detection"""
     if "rate_limiter" in st.session_state:
         st.session_state.rate_limiter.wait_if_needed()
     
     try:
-        if contains_nepali(prompt):
-            prompt = f"[NEPGLISH] {prompt}"
+        # Detect script PROPERLY
+        script = detect_script(prompt)
+        
+        # Add appropriate tag based on detection
+        if script == 'devanagari':
+            tagged_prompt = f"[USER WROTE IN DEVANAGARI SCRIPT - RESPOND 100% IN DEVANAGARI]\n{prompt}"
+        elif script == 'nepglish':
+            tagged_prompt = f"[USER WROTE IN ROMANIZED NEPALI - RESPOND IN NEPGLISH]\n{prompt}"
         else:
-            prompt = f"[ENGLISH ONLY] {prompt}"
+            tagged_prompt = f"[USER WROTE IN ENGLISH - RESPOND IN ENGLISH]\n{prompt}"
+        
+        # Debug log (optional - remove in production)
+        print(f"Detected script: {script}")
+        print(f"Original: {prompt}")
         
         # API call with timeout
         response = st.session_state.chat.send_message(
-            prompt,
+            tagged_prompt,
             request_options={"timeout": 30}
         )
         
@@ -433,111 +396,32 @@ with st.sidebar:
         """)
 
 SUGGESTION_POOL = [
-
     # --- English ---
     "Explain Nepal to someone visiting for the first time",
     "What skills are most useful for students today?",
     "How can someone improve focus while studying?",
     "What are common career mistakes students make?",
     "Teach me a useful life skill in simple terms",
-    "Why do people feel pressure about success?",
-    "How does the education system in Nepal work?",
-    "What habits help people stay consistent?",
-    "Explain a complex topic in very simple words",
-    "What makes a good learner in today's world?",
-    "How do I know if I'm choosing the right career?",
-    "What's the difference between knowledge and wisdom?",
-    "Why is failure important for growth?",
-    "How can I build better relationships with people?",
-    "What does it mean to live a meaningful life?",
-    "How do successful people manage their time?",
-    "What should I do when I feel completely lost?",
-    "How can I develop critical thinking skills?",
-    "What's the best way to handle criticism?",
-    "Why do some people succeed while others don't?",
-
+    
     # --- Nepglish (Romanized Nepali) ---
     "Bachelor pachi career choose kasari garne?",
     "Padhai ma motivation harayo bhane k garne?",
     "Nepal ma students haru ko main struggle ke ho?",
     "English bolna confident kasari huney?",
     "Time management ma kasari improve garne?",
-    "Technology sikna beginner le kaha bata start garne?",
-    "Ajkal youth haru kina dherai stressed huncha?",
-    "Scholarship pauna generally k k chaincha?",
-    "Self-discipline develop kasari garne?",
-    "Future ko lagi useful skills kun kun huncha?",
-    "Parents sanga expectations ko pressure kasari handle garne?",
-    "Friend circle ramro kasari banaune?",
-    "Abroad jane ki Nepal ma basne - kasari decide garne?",
-    "Exam ma fail bhayo bhane k garne?",
-    "Money save garna kasari start garne?",
-    "Public speaking ma dar kasari hataaune?",
-    "Social media le mental health ma k effect garcha?",
-    "Gharma padhai ko environment kasari banaune?",
-    "Networking skills kasari develop garne?",
-    "Part-time job ra padhai kasari balance garne?",
-
+    
     # --- Devanagari (नेपाली) ---
     "नेपालमा शिक्षा प्रणाली कसरी काम गर्छ?",
     "विद्यार्थीहरूले सबैभन्दा धेरै सामना गर्ने समस्या के हुन्?",
     "समय व्यवस्थापन किन गाह्रो हुन्छ?",
     "आत्मविश्वास कसरी बढाउने?",
     "करियर छनोट गर्दा के कुरामा ध्यान दिनुपर्छ?",
-    "अंग्रेजी भाषा सिक्न सजिलो तरिका के हो?",
-    "आजको समयमा सफल हुन के आवश्यक छ?",
-    "नेपालमा युवाहरू किन चिन्तित छन्?",
-    "सीप र डिग्रीमध्ये कुन बढी महत्वपूर्ण छ?",
-    "पढाइमा ध्यान केन्द्रित गर्न के गर्ने?",
-    "असफलतासँग कसरी सामना गर्ने?",
-    "राम्रो बानी कसरी बनाउने?",
-    "तनाव व्यवस्थापन को सरल उपाय के हुन्?",
-    "नेपालमा रोजगारीका अवसर कहाँ छन्?",
-    "आफ्नो रुची कसरी पहिचान गर्ने?",
-    "सामाजिक सञ्जालले युवामा के प्रभाव पार्छ?",
-    "परिवारको आशा र आफ्नो सपना फरक भएमा के गर्ने?",
-    "नेपालमा उद्यमशीलता सुरु कसरी गर्ने?",
-    "आर्थिक स्वतन्त्रता कसरी प्राप्त गर्ने?",
-    "शिक्षा र प्रयोगात्मक ज्ञानमा के भिन्नता छ?",
-
-    # --- Mixed / Conversational ---
-    "Teach me one useful Nepali phrase with meaning",
-    "Why do people compare themselves with others?",
-    "Nepali culture ma guest lai kina respect garincha?",
-    "Simple way ma stress handle kasari garne?",
-    "Explain success without using big words",
-    "नेपालमा राम्रो भविष्य बनाउन के गर्न सकिन्छ?",
-    "How do people usually choose a career in Nepal?",
-    "Life ma discipline kina important huncha?",
-    "One advice every student should hear",
-    "Explain something interesting about daily life in Nepal",
-    "Gap year linu ramro decision ho ki haina?",
-    "What's one mistake you see students making repeatedly?",
-    "नेपाली युवाहरूको लागि सबैभन्दा ठूलो चुनौती के हो?",
-    "How to stay motivated jaba sabai kura galat huncha jasto lagcha?",
-    "Family expectation ra personal dream different bhayo bhane?",
-    "क्यारियरमा पैसा र खुशीमध्ये के महत्वपूर्ण?",
-    "Why do people fear taking risks?",
-    "Aafno talent kasari patta lagaaune?",
-    "What separates average students from great ones?",
-    "नेपालमा सामाजिक दबाब कसरी सामना गर्ने?",
-    "How can I become more independent?",
-    "Padhai chaina bhane success possible cha ki chaina?",
-    "What does balance in life actually mean?",
-    "विद्यार्थी जीवनमा के कुरा सबैभन्दा धेरै याद रहन्छ?",
-    "How to deal with people who don't believe in you?",
-    "Government job ra private job - kun ramro?",
-    "Why do smart people sometimes fail?",
-    "परिवारलाई निराश नगरी आफ्नो बाटो कसरी छान्ने?",
-    "What's the biggest lie students are told?",
-    "Nepali society ma change ko lagi k garna sakhincha?"
 ]
 
 import random
 
 if "suggestions" not in st.session_state:
     st.session_state.suggestions = random.sample(SUGGESTION_POOL, 4)
-
 
 if not st.session_state.messages:
     st.markdown("##### 💡 Try one of these")
@@ -556,8 +440,6 @@ if not st.session_state.messages:
                     )
                 st.rerun()
 
-
-
 # Display all messages
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
@@ -574,19 +456,7 @@ if prompt := st.chat_input("Ask anything — English, नेपाली, or mix
 
     # Render user bubble
     with st.chat_message("user"):
-        st.markdown(
-            f"""
-            <div style="
-                padding: 0.75rem 1rem;
-                border-radius: 12px;
-                background-color: rgba(255,255,255,0.05);
-                line-height: 1.6;
-            ">
-            {prompt}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown(prompt)
 
     # Assistant placeholder
     with st.chat_message("assistant"):
@@ -595,24 +465,11 @@ if prompt := st.chat_input("Ask anything — English, नेपाली, or mix
 
         reply = reply_to(prompt)
 
-        thinking.markdown(
-            f"""
-            <div style="
-                padding: 0.9rem 1.1rem;
-                border-radius: 14px;
-                background-color: rgba(0,128,255,0.08);
-                line-height: 1.65;
-            ">
-            {reply}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        thinking.markdown(reply)
 
     st.session_state.messages.append(
         {"role": "assistant", "content": reply}
     )
 
-    
     # Rerun to update the UI
     st.rerun()
