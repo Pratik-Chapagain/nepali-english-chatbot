@@ -1,13 +1,13 @@
 import streamlit as st
 import google.generativeai as genai
-import os, re, time
+import os, re, time, json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # ---------------- RATE LIMITER ----------------
 class RateLimiter:
     """Prevent hitting API limits"""
-    def __init__(self, calls_per_minute=8):
+    def __init__(self, calls_per_minute=5):
         self.calls_per_minute = calls_per_minute
         self.calls = []
     
@@ -30,7 +30,7 @@ class RateLimiter:
         
         self.calls.append(now)
 
-# ---------------- SCRIPT DETECTION (FIXED!) ----------------
+# ---------------- SCRIPT DETECTION ----------------
 def detect_script(text):
     """
     Detect the script of user input with high accuracy
@@ -73,7 +73,6 @@ def detect_script(text):
 def validate_response(response):
     """
     Prevent hallucinated URLs and problematic content from being sent
-    CRITICAL: This catches AI-generated fake links before they reach users
     """
     suspicious_patterns = [
         (r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+', 
@@ -86,10 +85,76 @@ def validate_response(response):
     
     for pattern, replacement in suspicious_patterns:
         if re.search(pattern, response):
-            print(f"⚠️  WARNING: Bot tried to generate URL - Pattern: {pattern}")
             response = re.sub(pattern, replacement, response)
     
     return response
+
+# ---------------- QUERY HISTORY MANAGER ----------------
+def add_to_history(query):
+    """Add query to recent history (max 5)"""
+    if "query_history" not in st.session_state:
+        st.session_state.query_history = []
+    
+    # Don't add duplicates or commands
+    if query not in st.session_state.query_history and not query.startswith('/'):
+        st.session_state.query_history.insert(0, query)
+        # Keep only last 5
+        st.session_state.query_history = st.session_state.query_history[:5]
+
+def get_history():
+    """Get query history"""
+    return st.session_state.get("query_history", [])
+
+# ---------------- FAQ HANDLER ----------------
+FAQ_DATABASE = {
+    # English FAQs
+    "what is kancha ai": {
+        "en": "Kancha AI is a bilingual AI assistant designed specifically for Nepali users. I can help with questions in English, Devanagari (नेपाली), or Romanized Nepali (Nepglish). I understand Nepal's culture, education system, and daily life.",
+        "ne": "Kancha AI एक bilingual AI assistant हो जुन विशेष गरी नेपाली प्रयोगकर्ताहरूको लागि design गरिएको छ। म अंग्रेजी, देवनागरी (नेपाली), वा Romanized Nepali (Nepglish) मा प्रश्नहरूको उत्तर दिन सक्छु।",
+        "np": "Kancha AI Nepal ko lagi banayeko bilingual AI assistant ho. Ma English, Devanagari (नेपाली), ya Romanized Nepali (Nepglish) ma help garna sakchu."
+    },
+    "who made you": {
+        "en": "I was created to serve the Nepali community with culturally-aware AI assistance. I'm built using Google's Gemini AI with a custom system designed for Nepali users.",
+        "ne": "म नेपाली समुदायलाई culturally-aware AI assistance प्रदान गर्न बनाइएको हुँ। म Google को Gemini AI प्रयोग गरेर नेपाली प्रयोगकर्ताहरूको लागि विशेष design गरिएको छु।",
+        "np": "Ma Nepali community lai help garna banayeko chu. Google ko Gemini AI use garera Nepali users ko lagi special design gareko chu."
+    },
+    "what can you do": {
+        "en": "I can help with:\n• General questions in English/Nepali\n• Nepal-related information (education, culture, daily life)\n• Study tips and career guidance\n• Language translation\n• Summarizing text\n• Cultural explanations",
+        "ne": "म यी कुरामा मद्दत गर्न सक्छु:\n• English/Nepali मा सामान्य प्रश्नहरू\n• Nepal-related जानकारी (शिक्षा, संस्कृति, दैनिक जीवन)\n• अध्ययन tips र करियर guidance\n• भाषा अनुवाद\n• Text summarize गर्न\n• सांस्कृतिक व्याख्या",
+        "np": "Ma yi kura ma help garna sakchu:\n• English/Nepali ma general questions\n• Nepal-related info (education, culture, daily life)\n• Study tips ra career guidance\n• Language translation\n• Text summarize garna\n• Cultural explanations"
+    },
+    "see exam": {
+        "en": "SEE (Secondary Education Examination) is Nepal's grade 10 board exam conducted by the National Examinations Board (NEB). It's a crucial exam that determines eligibility for higher secondary education (+2).",
+        "ne": "SEE (Secondary Education Examination) नेपालको कक्षा १० को board exam हो जुन राष्ट्रिय परीक्षा बोर्ड (NEB) द्वारा सञ्चालन गरिन्छ। यो उच्च माध्यमिक शिक्षा (+2) को लागि योग्यता निर्धारण गर्ने महत्त्वपूर्ण परीक्षा हो।",
+        "np": "SEE (Secondary Education Examination) Nepal ko grade 10 ko board exam ho jun National Examinations Board (NEB) le conduct garchha. Yo higher secondary education (+2) ko lagi eligibility determine garne important exam ho."
+    },
+    "dashain": {
+        "en": "Dashain is Nepal's biggest and most important festival, celebrated for 15 days in September/October. It symbolizes the victory of good over evil and is a time for family reunions, receiving Tika and blessings from elders.",
+        "ne": "दशैं नेपालको सबैभन्दा ठूलो र महत्त्वपूर्ण चाड हो, जुन सेप्टेम्बर/अक्टोबरमा १५ दिनसम्म मनाइन्छ। यसले असत्यमाथि सत्यको विजयलाई प्रतीक गर्दछ र परिवारको पुनर्मिलन, बुजुर्गहरूबाट टीका र आशीर्वाद प्राप्त गर्ने समय हो।",
+        "np": "Dashain Nepal ko sabai bhanda thulo ra important festival ho, jun September/October ma 15 din samma manaincha. Yo evil over good ko victory lai symbolize garchha ani family reunion, elder haru bata Tika ra blessings paune time ho."
+    },
+    "ioe entrance": {
+        "en": "IOE (Institute of Engineering) Entrance is the entrance exam for engineering programs at Tribhuvan University. It's highly competitive and covers Physics, Chemistry, Mathematics, and English. Students need strong preparation and typically score 35+ marks out of 100 for admission.",
+        "ne": "IOE (Institute of Engineering) Entrance त्रिभुवन विश्वविद्यालयमा इन्जिनियरिङ कार्यक्रमहरूको प्रवेश परीक्षा हो। यो अत्यधिक प्रतिस्पर्धात्मक छ र Physics, Chemistry, Mathematics, र English समावेश गर्दछ। विद्यार्थीहरूलाई बलियो तयारी चाहिन्छ र सामान्यतया १०० मध्ये ३५+ अंक भर्नाको लागि आवश्यक हुन्छ।",
+        "np": "IOE (Institute of Engineering) Entrance Tribhuvan University ma engineering programs ko entrance exam ho. Yo highly competitive cha ani Physics, Chemistry, Mathematics, ra English cover garchha. Students lai strong preparation chahincha ani typically 100 madhye 35+ marks admission ko lagi chahincha."
+    }
+}
+
+def check_faq(query):
+    """Check if query matches any FAQ"""
+    query_lower = query.lower().strip()
+    
+    for key, answers in FAQ_DATABASE.items():
+        if key in query_lower:
+            script = detect_script(query)
+            if script == 'devanagari':
+                return answers.get('ne', answers['en'])
+            elif script == 'nepglish':
+                return answers.get('np', answers['en'])
+            else:
+                return answers['en']
+    
+    return None
 
 # ---------------- CONFIG ----------------
 load_dotenv()
@@ -112,7 +177,7 @@ if not API_KEY:
     ## 🔑 API Key Configuration
     
     **For Production (Streamlit Cloud):**
-    1. Go to your app at: https://share.streamlit.io/
+    1. Go to your app settings
     2. Click ⚙️ Settings → Secrets
     3. Add: `GEMINI_API_KEY = "your-actual-key"`
     
@@ -120,7 +185,7 @@ if not API_KEY:
     1. Create `.streamlit/secrets.toml`
     2. Add: `GEMINI_API_KEY = "your-key"`
     
-    Get a key from: https://makersuite.google.com/app/apikey
+    Get a key from: https://aistudio.google.com/app/apikey
     """)
     st.stop()
 
@@ -144,165 +209,72 @@ STEP 6: IF NO → Respond in pure English
 
 <script_detection_rules>
 **DEVANAGARI MODE:**
-Trigger: User message contains क, ख, ग, घ, ङ, च, छ, ज, झ, ञ, ट, ठ, ड, ढ, ण, त, थ, द, ध, न, प, फ, ब, भ, म, य, र, ल, व, श, ष, स, ह, अ, आ, इ, ई, उ, ऊ, ए, ऐ, ओ, औ
-
 Response format:
 - Write 100% in Devanagari script
 - Only exception: Technical terms with no Nepali equivalent (smartphone, laptop, WiFi, email, app, software, online)
 - Use (१), (२), (३) for numbering
-- Example: "सफल हुनका लागि यी कुराहरू आवश्यक छन्: (१) स्पष्ट लक्ष्य (२) कडा मेहनत..."
 
 **NEPGLISH MODE:**
-Trigger: User message is in Latin script but contains Nepali words (ma, cha, chha, huncha, ho, ko, lai, le, timro, mero, tapai, kata, kina, kasari, k, kun)
-
 Response format:
 - 70% Romanized Nepali + 30% English
 - Use (1), (2), (3) for numbering
-- Example: "Success huna ko lagi yesto gara: (1) Clear goal set gara (2) Hard work gara..."
 
 **ENGLISH MODE:**
-Trigger: Pure English message, no Nepali words
-
 Response format:
 - 100% English
-- Example: "To succeed, focus on: (1) Clear goals (2) Hard work..."
 </script_detection_rules>
+
+<summarization_feature>
+**WHEN USER ASKS TO SUMMARIZE** (keywords: summarize, summary, short notes, छोटकरीमा, सारांश, संक्षेप):
+
+1. **MATCH USER'S SCRIPT** - Summary MUST be in same script as request
+2. **ONLY USE PROVIDED TEXT** - Do NOT add external information
+3. **LENGTH RULES:**
+   - Default: 3-5 key points in bullet format
+   - If "short": 2-3 sentences
+   - If "detailed": Structured paragraphs
+4. **PRESERVE MEANING** - Keep original intent intact
+
+**EXAMPLE:**
+User: "यो text को सारांश दिनुहोस्: [long text]"
+Response: Must be in Devanagari, extracting only key points from provided text
+</summarization_feature>
 
 <mandatory_rules>
 1. **Never fabricate**: No fake business names, addresses, prices, phone numbers
-2. **No clickable links**: No https://, http://, www. - only mention "Google ma search gara" or "तलाश गर्नुहोस्"
-3. **Use web search for**: Specific locations, current prices, recent events, business recommendations
-4. **Default to "tapai"** (तपाईं): Don't assume gender unless user establishes it (dai/didi/bhai)
-5. **Be concise**: 150-250 words max unless user requests detailed essay
+2. **No clickable links**: No https://, http://, www.
+3. **Default to "tapai"** (तपाईं): Don't assume gender
+4. **Be concise**: 150-250 words max unless user requests detailed essay
 </mandatory_rules>
-
-<response_examples>
-
-**EXAMPLE 1 - DEVANAGARI INPUT (CORRECT):**
-User: "आजको समयमा सफल हुन के आवश्यक छ?"
-
-✅ CORRECT Response:
-"आजको समयमा सफल हुनका लागि यी कुराहरू आवश्यक छन्:
-
-(१) **स्पष्ट लक्ष्य र योजना**: तपाईं के हासिल गर्न चाहनुहुन्छ भन्ने कुरा स्पष्ट हुनुपर्छ।
-
-(२) **निरन्तर सिकाइ**: नयाँ सीप र ज्ञान प्राप्त गरिरहनु आवश्यक छ। संसार द्रुत गतिमा परिवर्तन भइरहेको छ।
-
-(३) **कडा परिश्रम र समर्पण**: सफलता रातारात आउँदैन। लगनशील भएर काम गर्नुपर्छ।
-
-(४) **अनुकूलन क्षमता**: परिस्थिति अनुसार आफूलाई परिवर्तन गर्न सक्नुपर्छ। समस्यालाई अवसरको रूपमा हेर्नुहोस्।
-
-(५) **सम्बन्ध निर्माण**: राम्रो network बनाउनु महत्त्वपूर्ण छ। सही मानिसहरूसँग जोडिनुहोस्।
-
-(६) **असफलताबाट सिक्ने**: असफलता आउँछ, तर त्यसबाट सिकेर पुनः प्रयास गर्नु नै सफलताको कुञ्जी हो।
-
-यी कुराहरू अभ्यासमा ल्याउनुभयो भने सफलता पक्कै प्राप्त हुन्छ।"
-
-❌ WRONG (Don't do this):
-"Aaja ko time ma successful huna ko lagi..." (This is Nepglish - WRONG for Devanagari input!)
-
----
-
-**EXAMPLE 2 - NEPGLISH INPUT (CORRECT):**
-User: "Aaja ko samay ma successful huna k garne?"
-
-✅ CORRECT Response:
-"Aaja ko time ma successful huna yesto gara:
-
-(1) **Clear goal** set gara - Timro target k ho clear hunuparcha
-
-(2) **Continuous learning** gara - Naya skills sikhdai raha, books padha, courses leu
-
-(3) **Hard work** gara - Success overnight audaina, consistent effort chahincha
-
-(4) **Adaptable** bana - Situation change huncha, adjust huna sikau
-
-(5) **Good network** banau - Right people sanga connect bha, mentors khoja
-
-(6) **Resilient** bana - Fail bhaye pani discourage nahau, sikera agadi badha
-
-Yi kura follow garyo bhane success ko chance dherai badhcha."
-
-❌ WRONG (Don't do this):
-"आजको समयमा सफल हुनका लागि..." (This is Devanagari - WRONG for Nepglish input!)
-
----
-
-**EXAMPLE 3 - ENGLISH INPUT:**
-User: "What is needed to succeed in today's world?"
-
-✅ CORRECT Response:
-"To succeed in today's world, focus on these essentials:
-
-(1) **Clear goals and planning** - Define what success means to you
-
-(2) **Continuous learning** - Stay updated with new skills and knowledge
-
-(3) **Hard work and dedication** - Consistent effort is non-negotiable
-
-(4) **Adaptability** - Be flexible and adjust to changing circumstances
-
-(5) **Building relationships** - Network with the right people
-
-(6) **Resilience** - Learn from failures and keep moving forward
-
-Success is a journey that requires commitment to these principles."
-
-</response_examples>
-
-<pre_response_checklist>
-Before sending ANY response:
-
-✅ User's script detected correctly?
-✅ My response matches that script 100%?
-✅ No fabricated data (names, prices, addresses)?
-✅ Appropriate length (not essay unless requested)?
-✅ Using "tapai" unless user established alternative?
-✅ No URLs (https://, www.)?
-
-**CRITICAL: If user wrote in Devanagari, every word in your response must be Devanagari (except unavoidable technical terms).**
-</pre_response_checklist>
-
-
-────────────────────────────────
-FEATURE: TEXT / QUERY SUMMARIZATION
-────────────────────────────────
-WHEN USER ASKS TO SUMMARIZE (keywords: summarize, summary, short notes, छोटकरीमा, सारांश):
-
-1. FOLLOW STRICT SCRIPT MATCHING
-   - Summary MUST be in the same script as user input
-   - NO English fallback
-
-2. DO NOT ADD NEW INFORMATION
-   - ONLY compress and rephrase what the user provided
-   - NO assumptions, NO external facts
-
-3. LENGTH RULES:
-   - If length NOT specified → 4–5 sentences OR 3–5 bullet points
-   - If user says “short” → 2–3 sentences
-   - If user says “detailed” → structured bullets
-
-4. KEEP MEANING INTACT
-   - Preserve original intent
-   - Preserve key points
-   - Remove redundancy only
-
-FAILURE TO FOLLOW THESE RULES = CRITICAL ERROR.
-
-
----
 
 **CORE PRINCIPLE: Perfect script matching + Honest information + Concise responses + Nepal focus**
 """
 
 model = genai.GenerativeModel(
-    "gemini-2.0-flash-exp",
+    "gemini-2.5-flash",
     system_instruction=SYSTEM_PROMPT
 )
 
 # ---------------- IMPROVED REPLY FUNCTION ----------------
 def reply_to(prompt):
     """Send message to Gemini API with proper script detection"""
+    
+    # Check for special commands
+    if prompt.startswith('/summarize') or prompt.startswith('/summary'):
+        text_to_summarize = prompt.replace('/summarize', '').replace('/summary', '').strip()
+        if not text_to_summarize:
+            script = detect_script(prompt)
+            if script == 'devanagari':
+                return "कृपया summarize गर्नको लागि text प्रदान गर्नुहोस्। उदाहरण: /summarize [your text]"
+            else:
+                return "Kripaya summarize garna ko lagi text provide garnus. Example: /summarize [your text]"
+        prompt = f"Please summarize this text in the same language/script: {text_to_summarize}"
+    
+    # Check FAQ first (instant response, no API call)
+    faq_response = check_faq(prompt)
+    if faq_response:
+        return f"**📌 Quick Answer:**\n\n{faq_response}"
+    
     if "rate_limiter" in st.session_state:
         st.session_state.rate_limiter.wait_if_needed()
     
@@ -318,31 +290,35 @@ def reply_to(prompt):
         else:
             tagged_prompt = f"[USER WROTE IN ENGLISH - RESPOND IN ENGLISH]\n{prompt}"
         
-        # Debug log (optional - remove in production)
-        print(f"Detected script: {script}")
-        print(f"Original: {prompt}")
-        
         # API call with timeout
         response = st.session_state.chat.send_message(
             tagged_prompt,
             request_options={"timeout": 30}
         )
         
-        # CRITICAL: Validate response before returning
+        # Validate response before returning
         validated_response = validate_response(response.text)
-        
-        # Log if response was modified
-        if validated_response != response.text:
-            print(f"⚠️  Response was sanitized to remove problematic content")
         
         return validated_response
         
     except Exception as e:
         error_message = str(e).lower()
         
+        # Detect script for error message
+        error_script = detect_script(prompt)
+        
         if "quota" in error_message or "429" in str(e):
-            return """**⚠️ Request Limit Reached**
-            
+            if error_script == 'devanagari':
+                return """**⚠️ Request Limit पुग्यो**
+
+कृपया १-२ मिनेट पर्खनुहोस्। Free tier मा limited requests छन्।
+
+**Tips:**
+• छोटो प्रश्न सोध्नुहोस्
+• केही मिनेट पछि पुनः प्रयास गर्नुहोस्"""
+            else:
+                return """**⚠️ Request Limit Reached**
+
 Kripaya 1-2 minute wait garnus. Free tier ma limited requests chan.
 
 **Tips:**
@@ -350,16 +326,16 @@ Kripaya 1-2 minute wait garnus. Free tier ma limited requests chan.
 • Kei minute pachi try garnus"""
         
         elif "timeout" in error_message:
-            return "**⏱️ Response Timeout**\n\nAI lai time lagyo. Shorter message try garnus ya wait garera feri sodhnus."
-        
-        elif "network" in error_message or "connection" in error_message:
-            return "**🌐 Connection Issue**\n\nInternet connection check garnus ani feri try garnus."
-        
-        elif "invalid" in error_message and "key" in error_message:
-            return "**🔑 Configuration Issue**\n\nAI service setup ma problem cha. Admin lai report garnus."
+            if error_script == 'devanagari':
+                return "**⏱️ Response Timeout**\n\nAI लाई समय लाग्यो। छोटो message try गर्नुहोस् वा केही समय पछि फेरि सोध्नुहोस्।"
+            else:
+                return "**⏱️ Response Timeout**\n\nAI lai time lagyo. Shorter message try garnus ya wait garera feri sodhnus."
         
         else:
-            return f"**❌ Error**\n\nMalai issue bhayo. Feri try garnus ya question differently sodhnus."
+            if error_script == 'devanagari':
+                return f"**❌ Error**\n\nमलाई समस्या भयो। फेरि प्रयास गर्नुहोस्।"
+            else:
+                return f"**❌ Error**\n\nMalai issue bhayo. Feri try garnus."
 
 # ---------------- STATE ----------------
 if "messages" not in st.session_state:
@@ -369,13 +345,43 @@ if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
 if "rate_limiter" not in st.session_state:
-    st.session_state.rate_limiter = RateLimiter(calls_per_minute=8)
+    st.session_state.rate_limiter = RateLimiter(calls_per_minute=5)
+
+if "query_history" not in st.session_state:
+    st.session_state.query_history = []
 
 st.markdown(
     """
     <style>
     .stChatInput {
         margin-top: -1.5rem;
+    }
+    
+    /* Improve sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc;
+    }
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    /* Button styling for better look */
+    .stButton button {
+        border-radius: 8px;
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    /* Primary button special style */
+    .stButton button[kind="primary"] {
+        background-color: #dc2626;
     }
     </style>
     """,
@@ -385,7 +391,7 @@ st.markdown(
 # ---------------- UI ----------------
 st.markdown(
     """
-    <h1 style="margin-bottom: 0.2rem;">Kancha AI 🇳🇵</h1>
+    <h1 style="margin-bottom: 0.2rem;">Kancha AI</h1>
     <p style="color: #6b7280; margin-top: 0;">
     Ask me anything in English or Nepali.
     </p>
@@ -393,54 +399,103 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Rate limit info in sidebar
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
-    st.markdown("### ⏱️ Rate Limit")
-
-    if "rate_limiter" in st.session_state:
-        calls_this_minute = len([t for t in st.session_state.rate_limiter.calls 
-                               if datetime.now() - t < timedelta(minutes=1)])
-        st.progress(calls_this_minute / 8, 
-                   text=f"{calls_this_minute}/8 requests this minute")
-    st.caption("Free tier limits apply. Please use thoughtfully.")
+    # Header with branding
+    st.markdown("""
+        <div style="text-align: center; padding: 1rem 0; margin-bottom: 1.5rem;">
+            <h2 style="margin: 0; color: #1f2937;">Kancha AI</h2>
+            <p style="margin: 0; color: #6b7280; font-size: 0.875rem;">Your Nepali Assistant</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Add info about limitations
-    with st.expander("ℹ️ What I Can Help With"):
+    # Tab navigation for better organization
+    tab1, tab2, tab3 = st.tabs(["📝 Recent", "❓ Help", "⚙️ Settings"])
+    
+    # TAB 1: Recent Queries
+    with tab1:
+        history = get_history()
+        if history:
+            st.markdown("**Click to reuse:**")
+            for i, query in enumerate(history):
+                # Truncate long queries
+                display_query = query[:35] + "..." if len(query) > 35 else query
+                if st.button(display_query, key=f"history_{i}", use_container_width=True):
+                    st.session_state.messages.append({"role": "user", "content": query})
+                    with st.spinner("Thinking..."):
+                        reply = reply_to(query)
+                        st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.rerun()
+        else:
+            st.info("No recent queries yet. Start chatting!")
+    
+    # TAB 2: Help & FAQ
+    with tab2:
+        st.markdown("##### 💬 Quick Answers")
+        st.markdown("Ask me about:")
+        
+        faq_buttons = [
+            ("What is Kancha AI?", "what is kancha ai"),
+            ("What can you do?", "what can you do"),
+            ("Tell me about SEE", "see exam"),
+            ("Tell me about Dashain", "dashain"),
+            ("IOE entrance info", "ioe entrance")
+        ]
+        
+        for label, query_key in faq_buttons:
+            if st.button(label, key=f"faq_{query_key}", use_container_width=True):
+                st.session_state.messages.append({"role": "user", "content": label})
+                reply = reply_to(label)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.rerun()
+        
+        st.markdown("---")
+        st.markdown("##### ⌨️ Commands")
+        st.code("/summarize [text]", language=None)
+        st.caption("Summarize any text in your language")
+        
+    # TAB 3: Settings
+    with tab3:
+        st.markdown("##### 📊 Usage")
+        if "rate_limiter" in st.session_state:
+            calls_this_minute = len([t for t in st.session_state.rate_limiter.calls 
+                                   if datetime.now() - t < timedelta(minutes=1)])
+            st.progress(calls_this_minute / 5, text=f"{calls_this_minute}/5 requests")
+            st.caption("Resets every minute")
+        
+        st.markdown("---")
+        st.markdown("##### 🌐 Languages")
         st.markdown("""
-        **I can help with:**
-        - General questions (English/Nepali)
-        - Nepal-related information
-        - Translation and explanations
-        - Education guidance
-        - Cultural questions
-        
-        **I cannot:**
-        - Provide direct YouTube/website links
-        - Give real-time data (weather, prices)
-        - Access external websites
-        
-        *For links: I'll guide you on what to search!*
+        - 🇬🇧 English
+        - 🇳🇵 नेपाली (Devanagari)
+        - 🇳🇵 Nepglish (Romanized)
         """)
+        
+        st.markdown("---")
+        if st.button("🗑️ Clear Chat", use_container_width=True, type="primary"):
+            st.session_state.messages = []
+            st.session_state.chat = model.start_chat(history=[])
+            st.session_state.query_history = []
+            st.rerun()
+    
+    # Footer
+    st.markdown("---")
+    st.caption("💡 Built for Nepali users | Free tier")
 
+# ---------------- SUGGESTION BUTTONS ----------------
 SUGGESTION_POOL = [
-    # --- English ---
-    "Explain Nepal to someone visiting for the first time",
+    # English
     "What skills are most useful for students today?",
     "How can someone improve focus while studying?",
     "What are common career mistakes students make?",
-    "Teach me a useful life skill in simple terms",
     
-    # --- Nepglish (Romanized Nepali) ---
+    # Nepglish
     "Bachelor pachi career choose kasari garne?",
-    "Padhai ma motivation harayo bhane k garne?",
     "Nepal ma students haru ko main struggle ke ho?",
-    "English bolna confident kasari huney?",
     "Time management ma kasari improve garne?",
     
-    # --- Devanagari (नेपाली) ---
-    "नेपालमा शिक्षा प्रणाली कसरी काम गर्छ?",
+    # Devanagari
     "विद्यार्थीहरूले सबैभन्दा धेरै सामना गर्ने समस्या के हुन्?",
-    "समय व्यवस्थापन किन गाह्रो हुन्छ?",
     "आत्मविश्वास कसरी बढाउने?",
     "करियर छनोट गर्दा के कुरामा ध्यान दिनुपर्छ?",
 ]
@@ -453,10 +508,11 @@ if "suggestions" not in st.session_state:
 if not st.session_state.messages:
     st.markdown("##### 💡 Try one of these")
 
-    cols = st.columns(4)
+    cols = st.columns(2)
     for idx, s in enumerate(st.session_state.suggestions):
-        with cols[idx]:
+        with cols[idx % 2]:
             if st.button(s, key=f"sug_{idx}", use_container_width=True):
+                add_to_history(s)  # Add to history
                 st.session_state.messages.append(
                     {"role": "user", "content": s}
                 )
@@ -475,6 +531,9 @@ for m in st.session_state.messages:
 # Handle new user input
 st.markdown("<div style='height: 6rem;'></div>", unsafe_allow_html=True)
 if prompt := st.chat_input("Ask anything — English, नेपाली, or mixed 🙂"):
+    
+    # Add to history
+    add_to_history(prompt)
     
     # Save user message
     st.session_state.messages.append(
