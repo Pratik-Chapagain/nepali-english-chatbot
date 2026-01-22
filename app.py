@@ -267,6 +267,7 @@ model = genai.GenerativeModel(
     system_instruction=SYSTEM_PROMPT
 )
 
+
 # ---------------- IMPROVED REPLY FUNCTION ----------------
 def reply_to(prompt):
     """Send message to Gemini API with proper script detection"""
