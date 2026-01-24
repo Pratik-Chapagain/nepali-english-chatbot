@@ -394,373 +394,267 @@ if "query_history" not in st.session_state:
 if "suggestions" not in st.session_state:
     st.session_state.suggestions = []
 
-# ---------------- POLISHED & PROFESSIONAL CSS ----------------
-st.markdown("""
+# ---------------- THEME TOGGLE ----------------
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+# ---------------- CLEAN & BEAUTIFUL CSS ----------------
+st.markdown(f"""
     <style>
-    /* Modern Color System */
-    :root {
+    /* ========== COLORS ========== */
+    :root {{
         --primary: #0891b2;
-        --primary-hover: #0e7490;
         --accent: #3b82f6;
         --success: #10b981;
         --danger: #ef4444;
-        --bg: #ffffff;
-        --bg-secondary: #f8fafc;
-        --bg-tertiary: #f1f5f9;
-        --text: #0f172a;
-        --text-secondary: #64748b;
-        --text-muted: #94a3af;
-        --border: #e2e8f0;
-        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-        --radius-sm: 8px;
-        --radius-md: 12px;
-        --radius-lg: 16px;
-        --radius-full: 9999px;
-    }
+        
+        {'--bg: #0f172a; --bg-secondary: #1e293b; --bg-tertiary: #334155; --text: #f1f5f9; --text-secondary: #cbd5e1; --border: #334155; --shadow: 0 2px 8px rgba(0,0,0,0.4);' if st.session_state.dark_mode else '--bg: #ffffff; --bg-secondary: #f8fafc; --bg-tertiary: #f1f5f9; --text: #0f172a; --text-secondary: #64748b; --border: #e2e8f0; --shadow: 0 2px 8px rgba(0,0,0,0.1);'}
+    }}
     
-    /* Global Reset */
-    #MainMenu, header, footer {visibility: hidden;}
+    /* Remove branding */
+    #MainMenu, header, footer {{visibility: hidden;}}
     
-    * {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-    
-    /* Main Layout */
-    .main .block-container {
+    /* Layout */
+    .main .block-container {{
         max-width: 1100px;
-        padding: 2rem 2.5rem 9rem;
-    }
+        padding: 1.5rem 2rem 8rem;
+    }}
     
     /* ========== HEADER ========== */
-    .app-header {
+    .app-header {{
         text-align: center;
-        padding: 2rem 0 3.5rem;
-        animation: fadeInDown 0.6s ease-out;
-    }
+        padding: 2rem 0 2.5rem;
+        position: relative;
+    }}
     
-    @keyframes fadeInDown {
-        from {
-            opacity: 0;
-            transform: translateY(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .app-header h1 {
-        font-size: 3rem;
+    .app-header h1 {{
+        font-size: 2.75rem;
         font-weight: 800;
         color: var(--primary);
-        margin-bottom: 0.75rem;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-    }
+        margin-bottom: 0.5rem;
+    }}
     
-    .app-header .subtitle {
+    .app-header .subtitle {{
         color: var(--text-secondary);
-        font-size: 1.125rem;
-        margin-bottom: 1.75rem;
-        font-weight: 500;
-    }
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+    }}
     
-    /* Language Badges */
-    .lang-badges {
+    /* Language badges */
+    .lang-badges {{
         display: flex;
         gap: 0.75rem;
         justify-content: center;
         flex-wrap: wrap;
-    }
+    }}
     
-    .lang-badge {
-        background: var(--bg);
+    .lang-badge {{
+        background: var(--bg-secondary);
         border: 2px solid var(--border);
         padding: 0.5rem 1.25rem;
-        border-radius: var(--radius-full);
+        border-radius: 50px;
         font-size: 0.9rem;
         color: var(--text-secondary);
         font-weight: 600;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: var(--shadow-sm);
-    }
+        transition: all 0.2s;
+    }}
     
-    .lang-badge:hover {
+    .lang-badge:hover {{
         border-color: var(--primary);
         color: var(--primary);
-        background: #ecfeff;
         transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-    }
+    }}
+    
+    /* Theme toggle */
+    .theme-toggle {{
+        position: fixed;
+        top: 1.5rem;
+        right: 2rem;
+        z-index: 1001;
+    }}
     
     /* ========== CHAT MESSAGES ========== */
-    .stChatMessage {
-        padding: 1.5rem;
-        border-radius: var(--radius-lg);
-        margin-bottom: 1.5rem;
+    .stChatMessage {{
+        padding: 1.25rem;
+        border-radius: 12px;
+        margin-bottom: 1.25rem;
         box-shadow: var(--shadow);
-        animation: slideUp 0.3s ease-out;
-        width: 100%;
-    }
+    }}
     
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    [data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    [data-testid="stChatMessageUser"] {{
+        background: {'#1e3a8a' if st.session_state.dark_mode else '#dbeafe'};
         border-left: 4px solid var(--accent);
-        color: var(--text);
-    }
+    }}
     
-    [data-testid="stChatMessageAssistant"] {
+    [data-testid="stChatMessageAssistant"] {{
         background: var(--bg-secondary);
         border-left: 4px solid var(--primary);
-        color: var(--text);
-    }
+    }}
     
-    .stChatMessage p {
+    .stChatMessage p {{
         color: var(--text);
         line-height: 1.7;
-        margin: 0;
-    }
+    }}
     
     /* ========== CHAT INPUT ========== */
-    .stChatInput {
+    .stChatInput {{
         position: fixed;
         bottom: 0;
         left: 21rem;
         right: 0;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        padding: 1.5rem 2.5rem;
-        border-top: 1px solid var(--border);
-        box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
-        z-index: 999;
-    }
-    
-    .stChatInput input {
-        border-radius: var(--radius-full);
-        border: 2px solid var(--border);
-        padding: 1rem 1.75rem;
-        font-size: 1rem;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
         background: var(--bg);
-    }
+        padding: 1.25rem 2rem;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+        z-index: 999;
+    }}
     
-    .stChatInput input:focus {
+    .stChatInput input {{
+        border-radius: 50px;
+        border: 2px solid var(--border);
+        padding: 0.875rem 1.5rem;
+        background: var(--bg-secondary);
+        color: var(--text);
+        transition: all 0.2s;
+    }}
+    
+    .stChatInput input:focus {{
         border-color: var(--primary);
-        box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.1);
         outline: none;
-    }
+    }}
     
-    .stChatInput input::placeholder {
-        color: var(--text-muted);
-    }
+    .stChatInput input::placeholder {{
+        color: var(--text-secondary);
+    }}
     
     /* ========== SIDEBAR ========== */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f0f9ff 0%, var(--bg-secondary) 100%);
+    [data-testid="stSidebar"] {{
+        background: var(--bg-secondary);
         border-right: 1px solid var(--border);
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
         width: 21rem;
-        overflow-y: auto;
-        z-index: 1000;
-    }
+    }}
     
-    [data-testid="stSidebar"] > div:first-child {
-        padding: 1rem 1rem 1.5rem;
-    }
-    
-    /* Sidebar Branding */
-    [data-testid="stSidebar"] h2 {
+    [data-testid="stSidebar"] h2 {{
         color: var(--primary) !important;
         font-weight: 800 !important;
-        font-size: 1.5rem !important;
-    }
+    }}
     
-    /* Sidebar Buttons */
-    [data-testid="stSidebar"] .stButton button {
+    /* Sidebar buttons */
+    [data-testid="stSidebar"] .stButton button {{
         width: 100%;
-        border-radius: var(--radius-sm);
-        padding: 0.875rem 1rem;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
         margin-bottom: 0.5rem;
         border: 1.5px solid var(--border);
         background: var(--bg);
-        text-align: left;
-        font-weight: 500;
-        font-size: 0.9rem;
         color: var(--text);
-        transition: all 0.15s ease;
-        box-shadow: var(--shadow-sm);
-    }
+        text-align: left;
+        transition: all 0.2s;
+    }}
     
-    [data-testid="stSidebar"] .stButton button:hover {
+    [data-testid="stSidebar"] .stButton button:hover {{
         border-color: var(--primary);
-        background: #f0f9ff;
         transform: translateX(4px);
-        box-shadow: var(--shadow);
-    }
+    }}
     
-    [data-testid="stSidebar"] .stButton button:active {
-        transform: translateX(4px) scale(0.98);
-    }
-    
-    /* Clear Chat Button */
-    [data-testid="stSidebar"] .stButton button[kind="primary"] {
-        background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+    /* Clear button */
+    [data-testid="stSidebar"] .stButton button[kind="primary"] {{
+        background: var(--danger);
         color: white;
         border: none;
         font-weight: 600;
-        box-shadow: var(--shadow);
-    }
+    }}
     
-    [data-testid="stSidebar"] .stButton button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-    }
-    
-    /* Info Boxes */
-    [data-testid="stSidebar"] .stAlert {
-        border-radius: var(--radius-sm);
-        border-left: 4px solid var(--primary);
-        background: #f0f9ff;
-        padding: 1rem;
-        font-size: 0.9rem;
-        box-shadow: var(--shadow-sm);
-    }
-    
-    /* Progress Bar */
-    [data-testid="stSidebar"] .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, var(--primary) 0%, #06b6d4 100%);
-        border-radius: var(--radius-sm);
-    }
-    
-    /* Captions */
-    [data-testid="stSidebar"] .stCaption {
-        color: var(--text-secondary);
-        font-size: 0.85rem;
-        line-height: 1.5;
-    }
-    
-    /* Dividers */
-    [data-testid="stSidebar"] hr {
-        margin: 1rem 0;
-        border: none;
-        border-top: 1px solid var(--border);
-    }
-    
-    /* Markdown in Sidebar */
-    [data-testid="stSidebar"] ul {
-        padding-left: 1rem;
-        line-height: 1.8;
-    }
-    
-    [data-testid="stSidebar"] li {
-        margin-bottom: 0.375rem;
-        color: var(--text);
-    }
+    [data-testid="stSidebar"] .stButton button[kind="primary"]:hover {{
+        background: #dc2626;
+    }}
     
     /* ========== TABS ========== */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 0.25rem;
         background: var(--bg-tertiary);
-        border-radius: var(--radius-sm);
+        border-radius: 8px;
         padding: 0.25rem;
-        border: none;
-    }
+    }}
     
-    .stTabs [data-baseweb="tab"] {
+    .stTabs [data-baseweb="tab"] {{
         border-radius: 6px;
-        padding: 0.625rem 1rem;
-        border: none;
-        background: transparent;
+        padding: 0.6rem 1rem;
         color: var(--text-secondary);
         font-weight: 600;
-        font-size: 0.9rem;
-        transition: all 0.15s ease;
-    }
+    }}
     
-    .stTabs [data-baseweb="tab"]:hover {
-        background: rgba(255, 255, 255, 0.5);
-        color: var(--text);
-    }
-    
-    .stTabs [aria-selected="true"] {
+    .stTabs [aria-selected="true"] {{
         background: var(--primary);
         color: white;
-        box-shadow: var(--shadow-sm);
-    }
+    }}
+    
+    /* ========== SUGGESTION BUTTONS ========== */
+    .main .stButton button {{
+        background: var(--bg-secondary);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        color: var(--text);
+        text-align: left;
+        transition: all 0.2s;
+        min-height: 80px;
+    }}
+    
+    .main .stButton button:hover {{
+        border-color: var(--primary);
+        transform: translateY(-3px);
+        box-shadow: var(--shadow);
+    }}
+    
+    /* Refresh button */
+    .main .stButton button[kind="secondary"] {{
+        min-height: auto;
+        color: var(--primary);
+        font-weight: 600;
+    }}
     
     /* ========== SCROLLBAR ========== */
-    ::-webkit-scrollbar {
+    ::-webkit-scrollbar {{
         width: 8px;
-        height: 8px;
-    }
+    }}
     
-    ::-webkit-scrollbar-track {
+    ::-webkit-scrollbar-track {{
         background: var(--bg-secondary);
-        border-radius: var(--radius-sm);
-    }
+    }}
     
-    ::-webkit-scrollbar-thumb {
+    ::-webkit-scrollbar-thumb {{
         background: var(--border);
-        border-radius: var(--radius-sm);
-        transition: background 0.2s ease;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--text-muted);
-    }
+        border-radius: 4px;
+    }}
     
     /* ========== RESPONSIVE ========== */
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding: 1rem 1rem 7rem;
-        }
+    @media (max-width: 768px) {{
+        .main .block-container {{
+            padding: 1rem 1rem 6rem;
+        }}
         
-        .app-header h1 {
-            font-size: 2.25rem;
-        }
-        
-        .app-header .subtitle {
-            font-size: 1rem;
-        }
-        
-        .stChatInput {
+        .stChatInput {{
             left: 0;
-            padding: 1rem 1rem 1.25rem;
-        }
+        }}
         
-        [data-testid="stSidebar"] {
-            width: 16rem;
-        }
-        
-        .lang-badge {
-            padding: 0.4rem 1rem;
-            font-size: 0.85rem;
-        }
-    }
+        .theme-toggle {{
+            top: 1rem;
+            right: 1rem;
+        }}
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- POLISHED HEADER ----------------
+# ---------------- THEME TOGGLE BUTTON ----------------
+with st.container():
+    col1, col2 = st.columns([6, 1])
+    with col2:
+        if st.button("🌙" if not st.session_state.dark_mode else "☀️", key="theme_toggle", help="Toggle theme"):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+
+# ---------------- HEADER ----------------
 st.markdown("""
     <div class="app-header">
         <h1>😊 Kancha AI</h1>
@@ -773,30 +667,23 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# ---------------- IMPROVED SIDEBAR ----------------
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
-    # Branding with better styling
     st.markdown("""
         <div style="text-align: center; padding: 0.75rem 0 1.5rem;">
-            <h2 style="margin: 0; color: #0891b2; font-weight: 800;">😊 Kancha AI</h2>
-            <p style="margin: 0.5rem 0 0; color: #64748b; font-size: 0.9rem; font-weight: 500;">
+            <h2>😊 Kancha AI</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0.5rem 0 0;">
                 Smart Assistant for Nepali Users
             </p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Tabs
     tab1, tab2, tab3 = st.tabs(["📝 Recent", "❓ FAQ", "ℹ️ Info"])
     
-    # ========== RECENT QUERIES ==========
     with tab1:
         history = get_history()
-        
         if history:
-            st.markdown("**💭 Your Recent Questions**")
-            st.caption("Click to ask again")
-            st.markdown("")
-            
+            st.markdown("**Recent Questions**")
             for i, query in enumerate(history):
                 display_query = query[:40] + "..." if len(query) > 40 else query
                 if st.button(display_query, key=f"history_{i}", use_container_width=True):
@@ -807,145 +694,122 @@ with st.sidebar:
                         st.session_state.messages.append({"role": "assistant", "content": reply})
                     st.rerun()
         else:
-            st.info("📭 No recent queries\n\nYour chat history will appear here")
+            st.info("📭 No recent queries")
     
-    # ========== FAQ ==========
     with tab2:
-        st.markdown("**🎯 Quick Access**")
-        st.caption("Popular questions")
-        st.markdown("")
-        
+        st.markdown("**Quick Questions**")
         faqs = [
-            ("What is Kancha AI?", "about"),
-            ("SEE exam information", "see"),
-            ("Dashain festival explained", "dashain"),
-            ("IOE entrance guide", "ioe"),
-            ("Study tips & techniques", "study"),
-            ("Career guidance", "career"),
-            ("How can you help me?", "help")
+            "What is Kancha AI?",
+            "SEE exam information",
+            "Dashain festival",
+            "IOE entrance guide",
+            "Study tips",
+            "Career guidance"
         ]
-        
-        for label, key in faqs:
-            if st.button(label, key=f"faq_{key}", use_container_width=True):
+        for label in faqs:
+            if st.button(label, key=f"faq_{label}", use_container_width=True):
                 st.session_state.messages.append({"role": "user", "content": label})
                 with st.spinner("🤔 Thinking..."):
                     reply = reply_to(label)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.rerun()
     
-    # ========== INFO ==========
     with tab3:
-        # Usage Status
         st.markdown("**📊 Usage**")
         if "rate_limiter" in st.session_state:
             calls = len([t for t in st.session_state.rate_limiter.calls 
                         if datetime.now() - t < timedelta(minutes=1)])
-            st.progress(min(1.0, calls / 5), text=f"**{calls}/5** requests")
+            st.progress(min(1.0, calls / 5), text=f"{calls}/5 requests")
             st.caption("⏱️ Resets every minute")
         
         st.divider()
-        
-        # Languages
-        st.markdown("**🌐 Supported Languages**")
-        st.markdown("• English — Full support\n• नेपाली — Native Devanagari\n• Nepglish — Roman-Nepali mix")
+        st.markdown("**Languages**")
+        st.markdown("• English\n• नेपाली\n• Nepglish")
         
         st.divider()
-        
-        # Features
-        st.markdown("**✨ Key Features**")
-        st.markdown("• Instant answers\n• Nepal-specific info\n• Education & career help\n• Cultural explanations")
+        st.markdown("**Features**")
+        st.markdown("• Instant answers\n• Nepal-specific\n• Study help")
     
-    # CLEAR CHAT - Always at bottom
     st.divider()
     if st.button("🗑️ Clear All Chats", use_container_width=True, type="primary"):
         st.session_state.messages = []
         st.session_state.chat = model.start_chat(history=[])
         st.session_state.query_history = []
-        st.success("✅ Chat cleared!")
+        st.success("✅ Cleared!")
         time.sleep(0.5)
         st.rerun()
     
-    # Footer
-    st.markdown("")
-    st.caption("Made with ❤️ for Nepali users\nPowered by Gemini AI")
+    st.caption("Made with ❤️ for Nepali users")
 
-# ---------------- SUGGESTION BUTTONS ----------------
+# ---------------- SUGGESTIONS ----------------
 SUGGESTION_POOL = [
-    # English
     "What skills are most useful for students today?",
     "How can I improve my focus while studying?",
-    "What are common career mistakes students make?",
-    "How to prepare for SEE exam effectively?",
-    
-    # Nepglish
+    "What are common career mistakes?",
+    "How to prepare for SEE exam?",
     "Bachelor pachi career choose kasari garne?",
-    "Nepal ma students haru ko main struggle ke ho?",
-    "Time management ma kasari improve garne?",
-    "IOE entrance ko lagi kasari prepare garne?",
-    
-    # Devanagari
-    "विद्यार्थीहरूले सबैभन्दा धेरै सामना गर्ने समस्या के हुन्?",
+    "Nepal ma students ko main struggle?",
+    "Time management kasari improve garne?",
+    "IOE entrance preparation?",
+    "विद्यार्थीहरूले सामना गर्ने समस्या?",
     "आत्मविश्वास कसरी बढाउने?",
-    "करियर छनोट गर्दा के कुरामा ध्यान दिनुपर्छ?",
-    "पढाइमा मन लाग्ने गरी कसरी अध्ययन गर्ने?",
+    "करियर छनोट गर्दा ध्यान दिनुपर्ने?",
+    "पढाइमा मन कसरी लाउने?",
 ]
 
-# Initialize suggestions if empty
 if not st.session_state.suggestions:
     st.session_state.suggestions = random.sample(SUGGESTION_POOL, 6)
 
-# Show suggestions only if no messages yet
 if not st.session_state.messages:
-    st.markdown("### 💡 Try asking...")
+    st.markdown("""
+        <div style="text-align: center; margin: 2rem 0 2rem;">
+            <h2 style="font-size: 1.75rem; font-weight: 700; color: var(--text);">
+                💡 Try asking...
+            </h2>
+            <p style="color: var(--text-secondary);">Popular questions</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    cols = st.columns(2)
+    cols = st.columns(2, gap="medium")
     for idx, suggestion in enumerate(st.session_state.suggestions):
         with cols[idx % 2]:
             if st.button(suggestion, key=f"sug_{idx}", use_container_width=True):
                 add_to_history(suggestion)
-                st.session_state.messages.append(
-                    {"role": "user", "content": suggestion}
-                )
-                with st.spinner("Kancha AI is thinking..."):
+                st.session_state.messages.append({"role": "user", "content": suggestion})
+                with st.spinner("🤔 Thinking..."):
                     reply = reply_to(suggestion)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": reply}
-                    )
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.rerun()
     
-    # Refresh suggestions button
-    if st.button("🔄 Show different suggestions", use_container_width=True):
-        st.session_state.suggestions = random.sample(SUGGESTION_POOL, 6)
-        st.rerun()
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔄 Different suggestions", use_container_width=True, type="secondary"):
+            st.session_state.suggestions = random.sample(SUGGESTION_POOL, 6)
+            st.rerun()
 
-# ---------------- CHAT HISTORY DISPLAY ----------------
+# ---------------- CHAT DISPLAY ----------------
+if st.session_state.messages:
+    st.markdown("---")
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # ---------------- CHAT INPUT ----------------
-# Add some space at the bottom for the fixed chat input
 st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
 
-if prompt := st.chat_input("Type your question here...", key="chat_input"):
-    # Add to history
+if prompt := st.chat_input("Type your question... (English, नेपाली, or Nepglish)"):
     add_to_history(prompt)
-    
-    # Save user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Display user message immediately
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Generate assistant response
     with st.chat_message("assistant"):
         with st.spinner("🤔 Thinking..."):
             reply = reply_to(prompt)
             st.markdown(reply)
     
-    # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": reply})
-    
-    # Rerun to update UI
     st.rerun()
