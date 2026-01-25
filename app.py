@@ -394,9 +394,7 @@ if "query_history" not in st.session_state:
 if "suggestions" not in st.session_state:
     st.session_state.suggestions = []
 
-# ---------------- THEME TOGGLE ----------------
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
+
 
 # ---------------- CLEAN & BEAUTIFUL CSS ----------------
 st.markdown(f"""
@@ -408,7 +406,7 @@ st.markdown(f"""
         --success: #10b981;
         --danger: #ef4444;
         
-        {'--bg: #0f172a; --bg-secondary: #1e293b; --bg-tertiary: #334155; --text: #f1f5f9; --text-secondary: #cbd5e1; --border: #334155; --shadow: 0 2px 8px rgba(0,0,0,0.4);' if st.session_state.dark_mode else '--bg: #ffffff; --bg-secondary: #f8fafc; --bg-tertiary: #f1f5f9; --text: #0f172a; --text-secondary: #64748b; --border: #e2e8f0; --shadow: 0 2px 8px rgba(0,0,0,0.1);'}
+        
     }}
     
     /* Remove branding */
@@ -481,10 +479,7 @@ st.markdown(f"""
         box-shadow: var(--shadow);
     }}
     
-    [data-testid="stChatMessageUser"] {{
-        background: {'#1e3a8a' if st.session_state.dark_mode else '#dbeafe'};
-        border-left: 4px solid var(--accent);
-    }}
+    
     
     [data-testid="stChatMessageAssistant"] {{
         background: var(--bg-secondary);
@@ -646,13 +641,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- THEME TOGGLE BUTTON ----------------
-with st.container():
-    col1, col2 = st.columns([6, 1])
-    with col2:
-        if st.button("🌙" if not st.session_state.dark_mode else "☀️", key="theme_toggle", help="Toggle theme"):
-            st.session_state.dark_mode = not st.session_state.dark_mode
-            st.rerun()
+
 
 # ---------------- HEADER ----------------
 st.markdown("""
