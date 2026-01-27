@@ -1,0 +1,7 @@
+2026-01-26 23:59:13,263 - __main__ - INFO - RateLimiter initialized: 5 calls/min
+2026-01-26 23:59:13,265 - __main__ - INFO - Session state initialized
+2026-01-26 23:59:14,275 - __main__ - INFO - AI Chat Manager initialized
+2026-01-26 23:59:14,277 - __main__ - INFO - New chat session started
+2026-01-26 23:59:42,996 - __main__ - INFO - RateLimiter initialized: 5 calls/min
+2026-01-26 23:59:47,479 - __main__ - INFO - Message processed successfully in devanagari
+2026-01-26 23:59:47,665 - __main__ - INFO - RateLimiter initialized: 5 calls/min
